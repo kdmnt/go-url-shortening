@@ -1,0 +1,20 @@
+# Default text file handling
+* text=auto eol=lf
+
+# Explicitly declare text files to use LF line endings
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.md text eol=lf
+
+# Enhance diff output for Markdown files
+*.md diff
+
+# Ignore whitespace errors in Markdown files
+*.md -whitespace
+
+# Set language for syntax highlighting
+*.go linguist-language=Go
+*.md linguist-language=Markdown
+*.mod linguist-language=Go
+*.sum linguist-language=Go

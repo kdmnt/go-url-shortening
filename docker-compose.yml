@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    ports:
+      - "3000:3000"
+    environment:
+      - GIN_MODE=release
+    user: "appuser"
+    command: ["/app/main", "-disable-rate-limit=true"]
+    networks:
+      - url-shortener-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  k6:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: k6
+    volumes:
+      - ./tests/performance:/scripts
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/bin/sh"]
+    command: ["/scripts/run_tests_specify_type.sh"]
+    environment:
+      - BASE_URL=http://${APP_SERVICE_NAME:-app}:${APP_PORT:-3000}
+      - TEST_TYPE=${TEST_TYPE:-LOAD}
+    networks:
+      - url-shortener-network
+
+networks:
+  url-shortener-network:
+    driver: bridge

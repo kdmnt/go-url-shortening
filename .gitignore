@@ -1,0 +1,30 @@
+# Binaries for programs and plugins
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+
+# Output of the Go coverage tool
+**/*.out
+
+# Logs
+**/*.log
+
+# Dependency directories
+**/node_modules/
+
+# IDE directories
+**/.idea/
+**/.vscode/
+
+# System and hidden files
+**/.DS_Store
+**/.Trashes
+**/ehthumbs.db
+**/Thumbs.db
+
+# Backup files
+**/*.bak
+
+# Temporary files
+**/*.tmp

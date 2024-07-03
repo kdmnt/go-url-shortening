@@ -1,0 +1,239 @@
+openapi: 3.0.0
+info:
+  title: URL Shortener API
+  description: A simple API for creating and managing shortened URLs
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: URL Management
+    description: Operations for managing shortened URLs
+  - name: System
+    description: System-related operations
+paths:
+  /api/v1/short:
+    post:
+      summary: Create a short URL
+      description: Creates a new shortened URL from a provided long URL
+      tags:
+        - URL Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/URLRequest'
+            example:
+              url: "https://www.example.com/very/long/url/that/needs/shortening"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/URLResponse'
+              example:
+                short_url: "abc123"
+                original_url: "https://www.example.com/very/long/url/that/needs/shortening"
+                created_at: "2023-05-20T15:30:00Z"
+                updated_at: "2023-05-20T15:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/short/{short_url}:
+    get:
+      summary: Get original URL
+      description: Retrieves the original URL associated with a given short URL
+      tags:
+        - URL Management
+      parameters:
+        - name: short_url
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The short URL identifier
+          example: "abc123"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/URLResponse'
+              example:
+                short_url: "abc123"
+                original_url: "https://www.example.com/very/long/url/that/needs/shortening"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    put:
+      summary: Update a short URL
+      description: Updates the original URL associated with a given short URL
+      tags:
+        - URL Management
+      parameters:
+        - name: short_url
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/URLRequest'
+            example:
+              url: "https://www.example.com/updated/long/url"
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/URLResponse'
+              example:
+                short_url: "abc123"
+                original_url: "https://www.example.com/updated/long/url"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      summary: Delete a short URL
+      description: Deletes a short URL and its associated original URL
+      tags:
+        - URL Management
+      parameters:
+        - name: short_url
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "abc123"
+      responses:
+        '204':
+          description: No Content
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /health:
+    get:
+      summary: Health check
+      description: Checks if the service is up and running
+      tags:
+        - System
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "OK"
+  /{short_url}:
+    get:
+      summary: Redirect to original URL
+      description: Redirects to the original URL associated with a given short URL
+      tags:
+        - URL Management
+      parameters:
+        - name: short_url
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "abc123"
+      responses:
+        '301':
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              example: "https://www.example.com/very/long/url/that/needs/shortening"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+components:
+  schemas:
+    URLRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The original URL to be shortened
+      required:
+        - url
+    URLResponse:
+      type: object
+      properties:
+        short_url:
+          type: string
+          description: The generated short URL
+        original_url:
+          type: string
+          format: uri
+          description: The original long URL
+        created_at:
+          type: string
+          format: date-time
+          description: The timestamp when the short URL was created
+        updated_at:
+          type: string
+          format: date-time
+          description: The timestamp when the short URL was last updated
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Invalid input: url is required"
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Short URL not found"
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Rate limit exceeded"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Short URL already exists"
+
+security: []  # No authentication required

@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Run unit tests
+echo "Running unit tests..."
+go test ./...
+
+# If the tests fail, prevent the push
+if [ $? -ne 0 ]; then
+    echo "Unit tests failed. Push aborted."
+    exit 1
+fi
+
+echo "Unit tests passed. Proceeding with push."
+exit 0
