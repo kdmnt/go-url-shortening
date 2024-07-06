@@ -127,3 +127,48 @@ func TestRegisterRoutes_RedirectURL(t *testing.T) {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
 	}
 }
+
+func TestRegisterRoutes_CORSMiddleware(t *testing.T) {
+	router, mockHandler, cfg := setupTest()
+	RegisterRoutes(router, mockHandler, cfg)
+
+	req, _ := http.NewRequest("OPTIONS", "/api/v1/short", nil)
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	if status := resp.Code; status != http.StatusOK {
+		t.Errorf("CORS preflight request returned wrong status code: got %v want %v", status, http.StatusNoContent)
+	}
+	if resp.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Errorf("CORS header not set correctly")
+	}
+}
+
+func TestRegisterRoutes_RateLimiting(t *testing.T) {
+	router, mockHandler, cfg := setupTest()
+	mockHandler.On("CreateShortURL", mock.Anything).Return()
+	RegisterRoutes(router, mockHandler, cfg)
+
+	req, _ := http.NewRequest("POST", "/api/v1/short", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	mockHandler.AssertCalled(t, "RateLimitMiddleware")
+	mockHandler.AssertCalled(t, "CreateShortURL", mock.Anything)
+}
+
+func TestRegisterRoutes_DisabledRateLimiting(t *testing.T) {
+	router, mockHandler, cfg := setupTest()
+	cfg.DisableRateLimit = true
+	mockHandler.On("CreateShortURL", mock.Anything).Return()
+	RegisterRoutes(router, mockHandler, cfg)
+
+	req, _ := http.NewRequest("POST", "/api/v1/short", nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	mockHandler.AssertNotCalled(t, "RateLimitMiddleware")
+	mockHandler.AssertCalled(t, "CreateShortURL", mock.Anything)
+}
