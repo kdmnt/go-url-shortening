@@ -30,6 +30,7 @@ func TestRedirectURL(t *testing.T) {
 	}
 
 	mockLogger := zap.NewNop()
+	ctx := context.Background()
 
 	tests := []struct {
 		name           string
@@ -94,16 +95,17 @@ func TestRedirectURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockService := &mocks.MockURLService{}
-			mockService.On("GetURLData", mock.Anything, tt.shortURL).Return(tt.mockGetURLData(context.Background(), tt.shortURL))
+			mockService := new(mocks.MockURLService)
+			mockService.On("GetURLData", mock.Anything, tt.shortURL).Return(tt.mockGetURLData(ctx, tt.shortURL))
 
-			handler, err := NewURLHandler(context.Background(), mockService, cfg, mockLogger, rate.NewLimiter(rate.Every(time.Second), 10))
+			handler, err := NewURLHandler(ctx, mockService, cfg, mockLogger, tt.mockLimiter)
 			require.NoError(t, err)
 
 			router := gin.New()
 			router.GET("/:short_url", handler.RedirectURL)
 
-			req, _ := http.NewRequest("GET", "/"+tt.shortURL, nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/"+tt.shortURL, nil)
+			require.NoError(t, err)
 			resp := httptest.NewRecorder()
 
 			router.ServeHTTP(resp, req)
