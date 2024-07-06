@@ -1,11 +1,13 @@
 package main
 
 import (
-	"testing"
-
+	"flag"
 	"github.com/stretchr/testify/assert"
+	"go-url-shortening/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"os"
+	"testing"
 )
 
 func TestInit(t *testing.T) {
@@ -15,4 +17,32 @@ func TestInit(t *testing.T) {
 
 	// Check if the log level is set to InfoLevel
 	assert.True(t, logger.Core().Enabled(zapcore.InfoLevel))
+}
+
+func TestDisableRateLimitFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{"With flag", []string{"-disable-rate-limit"}, true},
+		{"Without flag", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset flags and cfg for each test
+			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+			cfg = config.DefaultConfig()
+
+			// Set up test arguments
+			os.Args = append([]string{"cmd"}, tt.args...)
+
+			// Parse flags
+			parseFlags()
+
+			// Check if DisableRateLimit is set correctly
+			assert.Equal(t, tt.expected, cfg.DisableRateLimit, "DisableRateLimit should be %v when flag is %v", tt.expected, tt.args)
+		})
+	}
 }
