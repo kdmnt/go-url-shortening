@@ -19,6 +19,20 @@ func TestInit(t *testing.T) {
 	assert.True(t, logger.Core().Enabled(zapcore.InfoLevel))
 }
 
+func TestConfigInitialization(t *testing.T) {
+	// Check if cfg is properly initialized
+	assert.NotNil(t, cfg)
+	assert.Equal(t, config.DefaultConfig(), cfg)
+
+	// Verify that modifying cfg doesn't affect the default config
+	originalRateLimit := cfg.RateLimit
+	cfg.RateLimit = 20
+	assert.NotEqual(t, config.DefaultConfig().RateLimit, cfg.RateLimit)
+
+	// Reset cfg to original state
+	cfg.RateLimit = originalRateLimit
+}
+
 func TestDisableRateLimitFlag(t *testing.T) {
 	tests := []struct {
 		name     string
