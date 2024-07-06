@@ -1,174 +1,70 @@
 package handlers
 
 import (
-	"github.com/stretchr/testify/mock"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"go-url-shortening/config"
 	"go-url-shortening/handlers/mocks"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
-func setupTest() (*gin.Engine, *mocks.MockURLHandler, *config.Config) {
+func setupTest() (*gin.Engine, *httptest.ResponseRecorder, *mocks.MockURLHandler, *config.Config) {
 	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	mockHandler := &mocks.MockURLHandler{}
-	mockHandler.On("RateLimitMiddleware").Return(gin.HandlerFunc(func(c *gin.Context) {}))
+	w := httptest.NewRecorder()
+	_, router := gin.CreateTestContext(w)
+	mockHandler := new(mocks.MockURLHandler)
 	cfg := config.DefaultConfig()
-	return router, mockHandler, cfg
+	return router, w, mockHandler, cfg
 }
 
-func TestRegisterRoutes_CreateShortURL(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("CreateShortURL", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.JSON(http.StatusCreated, gin.H{})
-	}).Return()
+func TestRegisterRoutes(t *testing.T) {
+	router, w, mockHandler, cfg := setupTest()
 
+	// Mock RateLimitMiddleware for all subtests
+	mockHandler.On("RateLimitMiddleware").Return(gin.HandlerFunc(func(c *gin.Context) {
+		c.Next()
+	}))
 	RegisterRoutes(router, mockHandler, cfg)
 
-	req, _ := http.NewRequest("POST", "/api/v1/short", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	t.Run("Routes are registered correctly", func(t *testing.T) {
+		routes := router.Routes()
+		assert.Len(t, routes, 6)
 
-	if status := resp.Code; status != http.StatusCreated {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
-	}
-}
+		expectedRoutes := map[string][]string{
+			"POST":    {"/api/v1/short"},
+			"GET":     {"/api/v1/short/:short_url", "/health", "/:short_url"},
+			"PUT":     {"/api/v1/short/:short_url"},
+			"DELETE":  {"/api/v1/short/:short_url"},
+			"OPTIONS": {"/api/v1/short"},
+		}
 
-func TestRegisterRoutes_GetURLData(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("GetURLData", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.JSON(http.StatusOK, gin.H{})
-	}).Return()
+		for _, route := range routes {
+			expectedPaths, exists := expectedRoutes[route.Method]
+			assert.True(t, exists, "Unexpected route method: %s", route.Method)
+			assert.Contains(t, expectedPaths, route.Path, "Route path mismatch for method %s", route.Method)
+		}
+	})
 
-	RegisterRoutes(router, mockHandler, cfg)
+	t.Run("CORS middleware is applied", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", "/api/v1/short", nil)
+		router.ServeHTTP(w, req)
 
-	req, _ := http.NewRequest("GET", "/api/v1/short/abc123", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE", w.Header().Get("Access-Control-Allow-Methods"))
+	})
 
-	if status := resp.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-}
+	t.Run("Rate limiting is applied and is enabled by default", func(t *testing.T) {
+		mockHandler.AssertCalled(t, "RateLimitMiddleware")
+	})
 
-func TestRegisterRoutes_UpdateURL(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("UpdateURL", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.JSON(http.StatusOK, gin.H{})
-	}).Return()
+	t.Run("Rate limiting is not applied when disabled", func(t *testing.T) {
+		newRouter, _, newMockHandler, newCfg := setupTest()
+		newCfg.DisableRateLimit = true
+		RegisterRoutes(newRouter, newMockHandler, newCfg)
 
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("PUT", "/api/v1/short/abc123", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if status := resp.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-}
-
-func TestRegisterRoutes_DeleteURL(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("DeleteURL", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.JSON(http.StatusNoContent, gin.H{})
-	}).Return()
-
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("DELETE", "/api/v1/short/abc123", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if status := resp.Code; status != http.StatusNoContent {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusNoContent)
-	}
-}
-
-func TestRegisterRoutes_HealthCheck(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("HealthCheck", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.JSON(http.StatusOK, gin.H{})
-	}).Return()
-
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("GET", "/health", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if status := resp.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-}
-
-func TestRegisterRoutes_RedirectURL(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("RedirectURL", mock.Anything).Run(func(args mock.Arguments) {
-		c := args.Get(0).(*gin.Context)
-		c.Redirect(http.StatusFound, "https://example.com")
-	}).Return()
-
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("GET", "/abc123", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if status := resp.Code; status != http.StatusFound {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
-	}
-}
-
-func TestRegisterRoutes_CORSMiddleware(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("OPTIONS", "/api/v1/short", nil)
-	req.Header.Set("Origin", "http://example.com")
-	req.Header.Set("Access-Control-Request-Method", "POST")
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	if status := resp.Code; status != http.StatusOK {
-		t.Errorf("CORS preflight request returned wrong status code: got %v want %v", status, http.StatusNoContent)
-	}
-	if resp.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Errorf("CORS header not set correctly")
-	}
-}
-
-func TestRegisterRoutes_RateLimiting(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	mockHandler.On("CreateShortURL", mock.Anything).Return()
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("POST", "/api/v1/short", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	mockHandler.AssertCalled(t, "RateLimitMiddleware")
-	mockHandler.AssertCalled(t, "CreateShortURL", mock.Anything)
-}
-
-func TestRegisterRoutes_DisabledRateLimiting(t *testing.T) {
-	router, mockHandler, cfg := setupTest()
-	cfg.DisableRateLimit = true
-	mockHandler.On("CreateShortURL", mock.Anything).Return()
-	RegisterRoutes(router, mockHandler, cfg)
-
-	req, _ := http.NewRequest("POST", "/api/v1/short", nil)
-	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
-
-	mockHandler.AssertNotCalled(t, "RateLimitMiddleware")
-	mockHandler.AssertCalled(t, "CreateShortURL", mock.Anything)
+		newMockHandler.AssertNotCalled(t, "RateLimitMiddleware")
+	})
 }

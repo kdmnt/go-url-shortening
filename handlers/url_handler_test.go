@@ -90,7 +90,6 @@ func TestNewURLHandler(t *testing.T) {
 				require.NoError(t, err)
 				assert.NotNil(t, handler)
 
-				// Type assertion to access the concrete type
 				concreteHandler, ok := handler.(*URLHandler)
 				require.True(t, ok, "Handler is not of type *URLHandler")
 
@@ -152,7 +151,7 @@ func setupTestHandler() (URLHandlerInterface, error) {
 		RequestTimeout: 5 * time.Second,
 		ServerPort:     ":3000",
 	}
-	mockService := &mocks.MockURLService{}
+	mockService := new(mocks.MockURLService)
 	logger := zap.NewNop()
 	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 	return NewURLHandler(context.Background(), mockService, cfg, logger, limiter)
@@ -199,7 +198,7 @@ func TestCreateShortURL(t *testing.T) {
 		},
 		{
 			name:           "Very Long URL",
-			inputURL:       "https://" + strings.Repeat(string('a'), 2000) + ".com",
+			inputURL:       "https://" + strings.Repeat("a", 2000) + ".com",
 			expectedStatus: http.StatusCreated,
 			mockCreateShortURL: func(ctx context.Context, originalURL string) (types.URLData, error) {
 				return types.URLData{ShortURL: "mockedShortURL", OriginalURL: originalURL, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
@@ -251,10 +250,8 @@ func TestCreateShortURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset mock service
-			mockService := &mocks.MockURLService{}
+			mockService := new(mocks.MockURLService)
 
-			// Set up mock service
 			if tt.mockCreateShortURL != nil {
 				mockService.On("CreateShortURL", mock.Anything, tt.inputURL).Return(tt.mockCreateShortURL(context.Background(), tt.inputURL))
 			}
@@ -267,10 +264,10 @@ func TestCreateShortURL(t *testing.T) {
 			var rr *httptest.ResponseRecorder
 
 			if tt.name == "Invalid JSON input" {
-				req, _ = http.NewRequest("POST", "/api/v1/short", bytes.NewBufferString("invalid json"))
+				req, _ = http.NewRequest(http.MethodPost, "/api/v1/short", bytes.NewBufferString("invalid json"))
 			} else {
 				body, _ := json.Marshal(types.URLRequest{URL: tt.inputURL})
-				req, _ = http.NewRequest("POST", "/api/v1/short", bytes.NewBuffer(body))
+				req, _ = http.NewRequest(http.MethodPost, "/api/v1/short", bytes.NewBuffer(body))
 			}
 
 			rr = httptest.NewRecorder()
@@ -354,7 +351,7 @@ func TestGetURLData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset mock service
-			mockService := &mocks.MockURLService{}
+			mockService := new(mocks.MockURLService)
 
 			// Set up mock service
 			mockService.On("GetURLData", mock.Anything, tt.shortURL).Return(tt.mockGetURLData(context.Background(), tt.shortURL))
@@ -363,22 +360,24 @@ func TestGetURLData(t *testing.T) {
 			require.True(t, ok)
 			urlHandler.service = mockService
 
-			// Create a new request
-			req, _ := http.NewRequest("GET", "/api/v1/short/"+tt.shortURL, nil)
-			rr := httptest.NewRecorder()
+			// Create a new gin context
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
 
-			// We need to set up the router to handle the request
-			gin.SetMode(gin.TestMode)
-			router := gin.New()
-			router.GET("/api/v1/short/:short_url", handler.GetURLData)
-			router.ServeHTTP(rr, req)
+			// Set up the request
+			req, _ := http.NewRequest(http.MethodGet, "/api/v1/short/"+tt.shortURL, nil)
+			c.Request = req
+			c.Params = []gin.Param{{Key: "short_url", Value: tt.shortURL}}
+
+			// Call the handler function
+			handler.GetURLData(c)
 
 			// Check the status code
-			assert.Equal(t, tt.expectedStatus, rr.Code)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusOK {
 				var response types.URLResponse
-				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				err := json.Unmarshal(w.Body.Bytes(), &response)
 				require.NoError(t, err)
 				assert.Equal(t, tt.shortURL, response.ShortURL, "Short URL in response should match")
 				assert.Equal(t, tt.expectedURL, response.OriginalURL, "Original URL in response should match")
@@ -484,12 +483,18 @@ func TestUpdateURL(t *testing.T) {
 				return errors.New("unknown error")
 			},
 		},
+		{
+			name:           "Invalid JSON input",
+			shortURL:       types.URLData{ShortURL: "abc123"},
+			inputURL:       types.URLData{OriginalURL: ""},
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset mock service
-			mockService := &mocks.MockURLService{}
+			mockService := new(mocks.MockURLService)
 
 			// Set up mock service
 			if tt.mockUpdateURL != nil {
@@ -506,15 +511,22 @@ func TestUpdateURL(t *testing.T) {
 			require.True(t, ok)
 			urlHandler.service = mockService
 
-			body, _ := json.Marshal(types.URLRequest{URL: tt.inputURL.OriginalURL})
-			req, _ := http.NewRequest("PUT", "/api/v1/short/"+tt.shortURL.ShortURL, bytes.NewBuffer(body))
-			rr := httptest.NewRecorder()
+			var req *http.Request
+			var rr *httptest.ResponseRecorder
 
-			// We need to set up the router to handle the request
-			gin.SetMode(gin.TestMode)
-			router := gin.New()
-			router.PUT("/api/v1/short/:short_url", handler.UpdateURL)
-			router.ServeHTTP(rr, req)
+			if tt.name == "Invalid JSON input" {
+				req, _ = http.NewRequest(http.MethodPut, "/api/v1/short/"+tt.shortURL.ShortURL, bytes.NewBufferString("invalid json"))
+			} else {
+				body, _ := json.Marshal(types.URLRequest{URL: tt.inputURL.OriginalURL})
+				req, _ = http.NewRequest(http.MethodPut, "/api/v1/short/"+tt.shortURL.ShortURL, bytes.NewBuffer(body))
+			}
+
+			rr = httptest.NewRecorder()
+
+			c, _ := gin.CreateTestContext(rr)
+			c.Request = req
+			c.Params = []gin.Param{{Key: "short_url", Value: tt.shortURL.ShortURL}}
+			handler.UpdateURL(c)
 
 			assert.Equal(t, tt.expectedStatus, rr.Code)
 
@@ -578,7 +590,7 @@ func TestDeleteURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset mock service
-			mockService := &mocks.MockURLService{}
+			mockService := new(mocks.MockURLService)
 
 			// Set up mock service
 			mockService.On("DeleteURL", mock.Anything, tt.shortURL).Return(tt.mockDeleteURL(context.Background(), tt.shortURL))
@@ -587,16 +599,22 @@ func TestDeleteURL(t *testing.T) {
 			require.True(t, ok)
 			urlHandler.service = mockService
 
-			req, _ := http.NewRequest("DELETE", "/api/v1/short/"+tt.shortURL, nil)
-			rr := httptest.NewRecorder()
+			w := httptest.NewRecorder()
+			c, router := gin.CreateTestContext(w)
 
-			// We need to set up the router to handle the request
-			gin.SetMode(gin.TestMode)
-			router := gin.New()
+			c.Params = gin.Params{{Key: "short_url", Value: tt.shortURL}}
+
+			req, _ := http.NewRequest(http.MethodDelete, "/api/v1/short/"+tt.shortURL, nil)
+			c.Request = req
+
+			// needed to register route otherwise it always returned 200
+			// https://github.com/gin-gonic/gin/issues/3443#issuecomment-1366625672
 			router.DELETE("/api/v1/short/:short_url", handler.DeleteURL)
-			router.ServeHTTP(rr, req)
+			router.ServeHTTP(w, req)
 
-			assert.Equal(t, tt.expectedStatus, rr.Code)
+			urlHandler.DeleteURL(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }

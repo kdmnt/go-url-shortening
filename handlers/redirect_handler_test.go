@@ -101,21 +101,19 @@ func TestRedirectURL(t *testing.T) {
 			handler, err := NewURLHandler(ctx, mockService, cfg, mockLogger, tt.mockLimiter)
 			require.NoError(t, err)
 
-			router := gin.New()
-			router.GET("/:short_url", handler.RedirectURL)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Params = gin.Params{{Key: "short_url", Value: tt.shortURL}}
+			c.Request, _ = http.NewRequestWithContext(ctx, http.MethodGet, "/"+tt.shortURL, nil)
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/"+tt.shortURL, nil)
-			require.NoError(t, err)
-			resp := httptest.NewRecorder()
+			handler.RedirectURL(c)
 
-			router.ServeHTTP(resp, req)
-
-			assert.Equal(t, tt.expectedStatus, resp.Code)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.expectedStatus == http.StatusMovedPermanently {
-				assert.Equal(t, tt.expectedURL, resp.Header().Get("Location"))
+				assert.Equal(t, tt.expectedURL, w.Header().Get("Location"))
 			} else {
-				assert.JSONEq(t, tt.expectedBody, resp.Body.String())
+				assert.JSONEq(t, tt.expectedBody, w.Body.String())
 			}
 		})
 	}

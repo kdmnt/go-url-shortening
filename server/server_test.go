@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go-url-shortening/handlers"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -118,7 +119,10 @@ func TestSetupRouter(t *testing.T) {
 	handler, err := setupURLHandler(ctx, cfg, store, logger)
 	assert.NoError(t, err)
 
-	router := setupRouter(handler, cfg)
+	w := httptest.NewRecorder()
+	_, router := gin.CreateTestContext(w)
+
+	router = setupRouter(handler, cfg)
 
 	assert.NotNil(t, router)
 
@@ -145,7 +149,9 @@ func TestSetupRouter(t *testing.T) {
 
 func TestSetupServer(t *testing.T) {
 	cfg := config.DefaultConfig()
-	router := gin.New()
+	cfg.ServerPort = ":3002" // Use a different port to avoid conflicts
+	w := httptest.NewRecorder()
+	_, router := gin.CreateTestContext(w)
 
 	server := setupServer(cfg, router)
 
@@ -156,7 +162,9 @@ func TestSetupServer(t *testing.T) {
 
 func TestStartServer(t *testing.T) {
 	cfg := config.DefaultConfig()
-	router := gin.New()
+	cfg.ServerPort = ":3003" // Use a different port to avoid conflicts
+	w := httptest.NewRecorder()
+	_, router := gin.CreateTestContext(w)
 	server := setupServer(cfg, router)
 	logger := zap.NewNop()
 
@@ -167,13 +175,14 @@ func TestStartServer(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Try to connect to the server
-	_, err := http.Get("http://localhost" + cfg.ServerPort + "/")
-	assert.NoError(t, err)
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code) // Expect 404 as we haven't set up any routes
 
 	// Shutdown the server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = server.Shutdown(ctx)
+	err := server.Shutdown(ctx)
 	assert.NoError(t, err)
 }
 

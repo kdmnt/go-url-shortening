@@ -11,38 +11,36 @@ import (
 	"go-url-shortening/config"
 )
 
+const (
+	testIP = "192.0.2.1:1234"
+)
+
 func TestCORSMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(CORSMiddleware())
-	router.GET("/", func(c *gin.Context) {
-		c.Status(http.StatusOK)
+
+	t.Run("CORS headers are set correctly for GET request", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/", nil)
+		CORSMiddleware()(c)
+
+		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE", w.Header().Get("Access-Control-Allow-Methods"))
+		assert.Equal(t, "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization", w.Header().Get("Access-Control-Allow-Headers"))
+		assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 	})
 
-	t.Run("CORS headers are set", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		resp := httptest.NewRecorder()
+	t.Run("OPTIONS request returns OK status", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("OPTIONS", "/", nil)
+		CORSMiddleware()(c)
 
-		router.ServeHTTP(resp, req)
-
-		assert.Equal(t, "*", resp.Header().Get("Access-Control-Allow-Origin"))
-		assert.Equal(t, "POST, GET, OPTIONS, PUT, DELETE", resp.Header().Get("Access-Control-Allow-Methods"))
-		assert.Equal(t, "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization", resp.Header().Get("Access-Control-Allow-Headers"))
-		assert.Equal(t, "nosniff", resp.Header().Get("X-Content-Type-Options"))
-	})
-
-	t.Run("OPTIONS request", func(t *testing.T) {
-		req := httptest.NewRequest("OPTIONS", "/", nil)
-		resp := httptest.NewRecorder()
-
-		router.ServeHTTP(resp, req)
-
-		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
 func TestRateLimitMiddleware(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
 		RateLimit:  10,
 		RatePeriod: time.Second,
@@ -51,65 +49,67 @@ func TestRateLimitMiddleware(t *testing.T) {
 		config: cfg,
 	}
 
-	router := gin.New()
-	router.Use(handler.RateLimitMiddleware())
-	router.GET("/", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
+	middleware := handler.RateLimitMiddleware()
 
 	t.Run("Within rate limit", func(t *testing.T) {
 		for i := 0; i < cfg.RateLimit; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			req.RemoteAddr = "192.0.2.1:1234" // Set a consistent IP address
-			resp := httptest.NewRecorder()
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/", nil)
+			c.Request.RemoteAddr = testIP
 
-			router.ServeHTTP(resp, req)
+			middleware(c)
 
-			assert.Equal(t, http.StatusOK, resp.Code)
-			time.Sleep(time.Millisecond) // Small delay to ensure rate limiter updates
+			assert.Equal(t, http.StatusOK, w.Code)
+			// Small delay to ensure rate limiter updates
+			time.Sleep(time.Millisecond)
 		}
 	})
 
 	t.Run("Exceeds rate limit", func(t *testing.T) {
-		// Make one more request to exceed the limit
-		req := httptest.NewRequest("GET", "/", nil)
-		req.RemoteAddr = "192.0.2.1:1234" // Use the same IP as before
-		resp := httptest.NewRecorder()
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/", nil)
+		c.Request.RemoteAddr = testIP
 
-		router.ServeHTTP(resp, req)
+		middleware(c)
 
-		assert.Equal(t, http.StatusTooManyRequests, resp.Code)
-		assert.Contains(t, resp.Body.String(), "Rate limit exceeded")
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Contains(t, w.Body.String(), "Rate limit exceeded")
 	})
 
 	t.Run("Rate limit resets after period", func(t *testing.T) {
-		// Use a different IP to avoid interference from previous tests
 		ip := "192.0.2.2:1234"
 
-		// First, reach the rate limit
-		for i := 0; i < cfg.RateLimit; i++ {
-			req := httptest.NewRequest("GET", "/", nil)
-			req.RemoteAddr = ip
-			resp := httptest.NewRecorder()
-			router.ServeHTTP(resp, req)
-			assert.Equal(t, http.StatusOK, resp.Code)
-		}
+		t.Run("Reach rate limit", func(t *testing.T) {
+			for i := 0; i < cfg.RateLimit; i++ {
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Request = httptest.NewRequest("GET", "/", nil)
+				c.Request.RemoteAddr = ip
+				middleware(c)
+				assert.Equal(t, http.StatusOK, w.Code)
+			}
+		})
 
-		// Verify that the next request is rate limited
-		req := httptest.NewRequest("GET", "/", nil)
-		req.RemoteAddr = ip
-		resp := httptest.NewRecorder()
-		router.ServeHTTP(resp, req)
-		assert.Equal(t, http.StatusTooManyRequests, resp.Code)
+		t.Run("Verify rate limit", func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/", nil)
+			c.Request.RemoteAddr = ip
+			middleware(c)
+			assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		})
 
-		// Wait for the rate limit period to pass
-		time.Sleep(cfg.RatePeriod)
+		t.Run("Wait for rate limit reset", func(t *testing.T) {
+			time.Sleep(cfg.RatePeriod)
 
-		// Verify that we can make a request again
-		req = httptest.NewRequest("GET", "/", nil)
-		req.RemoteAddr = ip // making sure we are using the same ip
-		resp = httptest.NewRecorder()
-		router.ServeHTTP(resp, req)
-		assert.Equal(t, http.StatusOK, resp.Code)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/", nil)
+			c.Request.RemoteAddr = ip
+			middleware(c)
+			assert.Equal(t, http.StatusOK, w.Code)
+		})
 	})
 }
