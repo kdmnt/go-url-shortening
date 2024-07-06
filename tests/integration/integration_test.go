@@ -30,6 +30,13 @@ import (
 	"go-url-shortening/types"
 )
 
+const (
+	testURL           = "https://example.com"
+	testUpdateURL     = "https://example.com/updated"
+	testNonExistentID = "nonexistent"
+	testCapacity      = 1000000
+)
+
 func sendRequest(t *testing.T, server *httptest.Server, method, path string, body interface{}) (*http.Response, []byte) {
 	var reqBody io.Reader
 	if body != nil {
@@ -61,7 +68,7 @@ func setupTestEnvironment(t *testing.T, storageCapacity ...int) (*httptest.Serve
 	if len(storageCapacity) > 0 {
 		capacity = storageCapacity[0]
 	}
-	logger, _ := zap.NewDevelopment()
+	logger := zap.NewNop()
 	store := storage.NewInMemoryStorage(capacity, logger)
 	urlService := services.NewURLService(store)
 
@@ -85,48 +92,48 @@ func setupTestEnvironment(t *testing.T, storageCapacity ...int) (*httptest.Serve
 }
 
 func TestIntegration(t *testing.T) {
-	server, cleanup, logger, router, cfg := setupTestEnvironment(t, 1000000)
+	server, cleanup, logger, router, cfg := setupTestEnvironment(t, testCapacity)
 	defer cleanup()
 
 	t.Run("BasicOperations", func(t *testing.T) {
 		var shortURL string
 
 		t.Run("CreateShortURL", func(t *testing.T) {
-			urlReq := types.URLRequest{URL: "https://example.com"}
-			resp, body := sendRequest(t, server, "POST", "/api/v1/short", urlReq)
-			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			urlReq := types.URLRequest{URL: testURL}
+			resp, body := sendRequest(t, server, http.MethodPost, "/api/v1/short", urlReq)
+			assert.Equal(t, http.StatusCreated, resp.StatusCode, "Expected status code %d, but got %d", http.StatusCreated, resp.StatusCode)
 
 			var response types.URLResponse
 			err := json.Unmarshal(body, &response)
-			require.NoError(t, err, "Failed to unmarshal response")
+			require.NoError(t, err, "Failed to unmarshal response: %v", err)
 			assert.NotEmpty(t, response.ShortURL, "Handler failed to return a short URL")
 			shortURL = response.ShortURL
 		})
 
 		t.Run("GetOriginalURL", func(t *testing.T) {
-			resp, body := sendRequest(t, server, "GET", "/api/v1/short/"+shortURL, nil)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			resp, body := sendRequest(t, server, http.MethodGet, "/api/v1/short/"+shortURL, nil)
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
 
 			var response types.URLResponse
 			err := json.Unmarshal(body, &response)
-			require.NoError(t, err, "Failed to unmarshal response")
-			assert.Equal(t, "https://example.com", response.OriginalURL)
+			require.NoError(t, err, "Failed to unmarshal response: %v", err)
+			assert.Equal(t, testURL, response.OriginalURL, "Expected original URL %s, but got %s", testURL, response.OriginalURL)
 		})
 
 		t.Run("UpdateURL", func(t *testing.T) {
-			urlReq := types.URLRequest{URL: "https://updated-example.com"}
-			resp, body := sendRequest(t, server, "PUT", "/api/v1/short/"+shortURL, urlReq)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			urlReq := types.URLRequest{URL: testUpdateURL}
+			resp, body := sendRequest(t, server, http.MethodPut, "/api/v1/short/"+shortURL, urlReq)
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
 
 			var response types.URLResponse
 			err := json.Unmarshal(body, &response)
-			require.NoError(t, err, "Failed to unmarshal response")
-			assert.Equal(t, "https://updated-example.com", response.OriginalURL)
+			require.NoError(t, err, "Failed to unmarshal response: %v", err)
+			assert.Equal(t, testUpdateURL, response.OriginalURL, "Expected updated URL %s, but got %s", testUpdateURL, response.OriginalURL)
 		})
 
 		t.Run("DeleteURL", func(t *testing.T) {
-			resp, _ := sendRequest(t, server, "DELETE", "/api/v1/short/"+shortURL, nil)
-			assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+			resp, _ := sendRequest(t, server, http.MethodDelete, "/api/v1/short/"+shortURL, nil)
+			assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Expected status code %d, but got %d", http.StatusNoContent, resp.StatusCode)
 		})
 	})
 
@@ -275,7 +282,7 @@ func TestIntegration(t *testing.T) {
 	t.Run("Extensive Modifications", func(t *testing.T) {
 		t.Parallel()
 		// Create a new storage, service, and handler for this test
-		testLogger, _ := zap.NewDevelopment()
+		testLogger := zap.NewNop()
 		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
 		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.RateLimit)), cfg.RateLimit)
@@ -344,23 +351,22 @@ func TestIntegration(t *testing.T) {
 		testServer, cleanup, _, _, _ := setupTestEnvironment(t)
 		defer cleanup()
 
-		// Test empty URL
-		emptyURLReq := types.URLRequest{URL: ""}
-		jsonBody, _ := json.Marshal(emptyURLReq)
-		req, _ := http.NewRequest("POST", testServer.URL+"/api/v1/short", bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		testCases := []struct {
+			name     string
+			url      string
+			expected int
+		}{
+			{"Empty URL", "", http.StatusBadRequest},
+			{"Malformed URL", "not-a-url", http.StatusBadRequest},
+		}
 
-		// Test malformed URL
-		malformedURLReq := types.URLRequest{URL: "not-a-url"}
-		jsonBody, _ = json.Marshal(malformedURLReq)
-		req, _ = http.NewRequest("POST", testServer.URL+"/api/v1/short", bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err = http.DefaultClient.Do(req)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				urlReq := types.URLRequest{URL: tc.url}
+				resp, _ := sendRequest(t, testServer, http.MethodPost, "/api/v1/short", urlReq)
+				assert.Equal(t, tc.expected, resp.StatusCode, "Expected status code %d for %s, but got %d", tc.expected, tc.name, resp.StatusCode)
+			})
+		}
 	})
 
 	t.Run("Duplicate URL", func(t *testing.T) {
@@ -462,7 +468,7 @@ func TestIntegration(t *testing.T) {
 		t.Parallel()
 		// Create a new test environment
 		testCfg := config.DefaultConfig()
-		testLogger, _ := zap.NewDevelopment()
+		testLogger := zap.NewNop()
 		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
 		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(testCfg.RateLimit)), testCfg.RateLimit)
