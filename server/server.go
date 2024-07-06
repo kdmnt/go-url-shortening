@@ -1,3 +1,4 @@
+// Package server provides the main server setup and run functionality for the URL shortening service.
 package server
 
 import (
@@ -16,6 +17,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Run initializes and starts the server, setting up all necessary components.
+// It returns an error if any part of the setup or running process fails.
 func Run(logger *zap.Logger, cfg *config.Config) error {
 	store := storage.NewInMemoryStorage(1000000, logger)
 
@@ -35,6 +38,8 @@ func Run(logger *zap.Logger, cfg *config.Config) error {
 	return waitForShutdown(ctx, server, logger)
 }
 
+// setupURLHandler creates and configures the URL handler with necessary dependencies.
+// It returns the configured handler or an error if setup fails.
 func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Storage, logger *zap.Logger) (handlers.URLHandlerInterface, error) {
 	handlerCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
@@ -52,12 +57,14 @@ func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Stor
 	return handler, nil
 }
 
+// setupRouter creates a new Gin router and registers the application routes.
 func setupRouter(urlHandler handlers.URLHandlerInterface, cfg *config.Config) *gin.Engine {
 	router := gin.Default()
 	handlers.RegisterRoutes(router, urlHandler, cfg)
 	return router
 }
 
+// setupServer creates and returns a new HTTP server with the given configuration and router.
 func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	return &http.Server{
 		Addr:    cfg.ServerPort,
@@ -65,6 +72,8 @@ func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	}
 }
 
+// startServer begins listening and serving HTTP requests.
+// It logs any errors that occur during server operation.
 func startServer(srv *http.Server, logger *zap.Logger) {
 	logger.Debug("Starting server", zap.String("address", srv.Addr))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -73,6 +82,8 @@ func startServer(srv *http.Server, logger *zap.Logger) {
 	logger.Debug("Server stopped")
 }
 
+// waitForShutdown blocks until the server receives an interrupt signal, then initiates a graceful shutdown.
+// It returns an error if the shutdown process fails.
 func waitForShutdown(ctx context.Context, srv *http.Server, logger *zap.Logger) error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
