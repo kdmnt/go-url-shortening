@@ -10,6 +10,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// client represents a client with its rate limiter and last seen time
+type client struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
 // CORSMiddleware adds CORS headers to the response.
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -32,35 +38,32 @@ func CORSMiddleware() gin.HandlerFunc {
 // It checks if the request is within the rate limit before calling the next handler.
 // If the rate limit is exceeded, it returns a 429 Too Many Requests error.
 func (h *URLHandler) RateLimitMiddleware() gin.HandlerFunc {
-	type client struct {
-		limiter  *rate.Limiter
-		lastSeen time.Time
-	}
+	const (
+		cleanupInterval   = time.Minute
+		clientInactiveFor = 3 * time.Minute
+	)
+
 	var (
 		mu      sync.Mutex
 		clients = make(map[string]*client)
 	)
 
-	go func() {
-		for {
-			time.Sleep(time.Minute)
-			mu.Lock()
-			for ip, client := range clients {
-				if time.Since(client.lastSeen) > 3*time.Minute {
-					delete(clients, ip)
-				}
-			}
-			mu.Unlock()
-		}
-	}()
+	// Start a goroutine to periodically clean up inactive clients
+	go h.cleanupInactiveClients(&mu, clients, cleanupInterval, clientInactiveFor)
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
+
 		mu.Lock()
+		// Create a new rate limiter for this IP if it doesn't exist
 		if _, found := clients[ip]; !found {
-			clients[ip] = &client{limiter: rate.NewLimiter(rate.Limit(h.config.RateLimit), h.config.RateLimit)}
+			clients[ip] = &client{
+				limiter: rate.NewLimiter(rate.Limit(h.config.RateLimit), h.config.RateLimit),
+			}
 		}
 		clients[ip].lastSeen = time.Now()
+
+		// Check if this request is allowed by the rate limiter
 		if !clients[ip].limiter.Allow() {
 			mu.Unlock()
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Rate limit exceeded"})
@@ -68,6 +71,21 @@ func (h *URLHandler) RateLimitMiddleware() gin.HandlerFunc {
 			return
 		}
 		mu.Unlock()
+
 		c.Next()
+	}
+}
+
+// cleanupInactiveClients periodically removes clients that haven't been seen recently
+func (h *URLHandler) cleanupInactiveClients(mu *sync.Mutex, clients map[string]*client, interval, inactiveFor time.Duration) {
+	for {
+		time.Sleep(interval)
+		mu.Lock()
+		for ip, client := range clients {
+			if time.Since(client.lastSeen) > inactiveFor {
+				delete(clients, ip)
+			}
+		}
+		mu.Unlock()
 	}
 }
