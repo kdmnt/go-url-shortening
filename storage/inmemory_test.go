@@ -3,30 +3,32 @@ package storage
 import (
 	"context"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-url-shortening/types"
+	"go.uber.org/zap"
 	"sync"
 	"testing"
 )
 
 func TestInMemoryStorage(t *testing.T) {
 	ctx := context.Background()
-	storage := NewInMemoryStorage(10, logrus.New())
+	logger := zap.NewNop()
+	storage := NewInMemoryStorage(10, logger)
 
 	t.Run("NewInMemoryStorage", func(t *testing.T) {
 		// Test with capacity <= 0
-		storage := NewInMemoryStorage(0, logrus.New())
+		logger := zap.NewNop()
+		storage := NewInMemoryStorage(0, logger)
 		assert.Equal(t, 1000, storage.capacity, "Capacity should be set to default 1000 when input is 0")
 
-		storage = NewInMemoryStorage(-5, logrus.New())
+		storage = NewInMemoryStorage(-5, logger)
 		assert.Equal(t, 1000, storage.capacity, "Capacity should be set to default 1000 when input is negative")
 
 		// Test with nil logger
 		storage = NewInMemoryStorage(10, nil)
 		assert.NotNil(t, storage.logger, "Logger should be initialized when input is nil")
-		assert.IsType(t, &logrus.Logger{}, storage.logger, "Logger should be of type *logrus.Logger")
+		assert.IsType(t, (*zap.Logger)(nil), storage.logger, "Logger should be of type *zap.Logger")
 	})
 
 	t.Run("Create", func(t *testing.T) {
@@ -46,7 +48,8 @@ func TestInMemoryStorage(t *testing.T) {
 		assert.Equal(t, ErrStorageCapacityReached, err)
 
 		// Test context cancellation
-		cancelStorage := NewInMemoryStorage(10, logrus.New())
+		logger := zap.NewNop()
+		cancelStorage := NewInMemoryStorage(10, logger)
 		cancelCtx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -119,7 +122,8 @@ func TestInMemoryStorage(t *testing.T) {
 		assert.Equal(t, ErrShortURLNotFound, err)
 
 		// Test context cancellation
-		cancelStorage := NewInMemoryStorage(10, logrus.New())
+		logger := zap.NewNop()
+		cancelStorage := NewInMemoryStorage(10, logger)
 		shortURL := "shortURL"
 		originalURL := "https://example.com"
 
@@ -143,7 +147,8 @@ func TestInMemoryStorage(t *testing.T) {
 	})
 
 	t.Run("Concurrent operations", func(t *testing.T) {
-		storage := NewInMemoryStorage(1000000, logrus.New())
+		logger := zap.NewNop()
+		storage := NewInMemoryStorage(1000000, logger)
 		var wg sync.WaitGroup
 		numOperations := 100
 

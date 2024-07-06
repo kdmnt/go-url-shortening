@@ -8,15 +8,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"go-url-shortening/config"
 	"go-url-shortening/handlers"
 	"go-url-shortening/services"
 	"go-url-shortening/storage"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
-func Run(logger *logrus.Logger, cfg *config.Config) error {
+func Run(logger *zap.Logger, cfg *config.Config) error {
 	store := storage.NewInMemoryStorage(1000000, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -35,7 +35,7 @@ func Run(logger *logrus.Logger, cfg *config.Config) error {
 	return waitForShutdown(ctx, server, logger)
 }
 
-func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Storage, logger *logrus.Logger) (handlers.URLHandlerInterface, error) {
+func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Storage, logger *zap.Logger) (handlers.URLHandlerInterface, error) {
 	handlerCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
 	defer cancel()
 
@@ -44,7 +44,7 @@ func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Stor
 
 	handler, err := handlers.NewURLHandler(handlerCtx, urlService, cfg, logger, limiter)
 	if err != nil {
-		logger.WithError(err).Error("Failed to create URL handler")
+		logger.Error("Failed to create URL handler", zap.Error(err))
 		return nil, err
 	}
 
@@ -65,15 +65,15 @@ func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	}
 }
 
-func startServer(srv *http.Server, logger *logrus.Logger) {
-	logger.WithField("address", srv.Addr).Debug("Starting server")
+func startServer(srv *http.Server, logger *zap.Logger) {
+	logger.Debug("Starting server", zap.String("address", srv.Addr))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.WithError(err).Error("Server error")
+		logger.Error("Server error", zap.Error(err))
 	}
 	logger.Debug("Server stopped")
 }
 
-func waitForShutdown(ctx context.Context, srv *http.Server, logger *logrus.Logger) error {
+func waitForShutdown(ctx context.Context, srv *http.Server, logger *zap.Logger) error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
@@ -83,7 +83,7 @@ func waitForShutdown(ctx context.Context, srv *http.Server, logger *logrus.Logge
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.WithError(err).Error("Server forced to shutdown")
+		logger.Error("Server forced to shutdown", zap.Error(err))
 		return err
 	}
 

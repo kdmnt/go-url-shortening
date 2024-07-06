@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	"go-url-shortening/services"
 )
@@ -47,33 +47,30 @@ func (h *URLHandler) RedirectURL(c *gin.Context) {
 func (h *URLHandler) handleRedirectError(c *gin.Context, err error, shortURL string) {
 	switch {
 	case errors.Is(err, services.ErrShortURLNotFound):
-		h.logger.WithField("short_url", shortURL).Info("Short URL not found")
+		h.logger.Info("Short URL not found", zap.String("short_url", shortURL))
 		c.JSON(http.StatusNotFound, gin.H{"error": errShortURLNotFound})
 	case errors.Is(err, context.DeadlineExceeded):
-		h.logger.WithField("short_url", shortURL).Warn("Request timed out")
+		h.logger.Warn("Request timed out", zap.String("short_url", shortURL))
 		c.JSON(http.StatusRequestTimeout, gin.H{"error": errRequestTimeout})
 	default:
-		h.logger.WithFields(logrus.Fields{
-			"short_url": shortURL,
-			"error":     err,
-		}).Error("Error retrieving URL")
+		h.logger.Error("Error retrieving URL",
+			zap.String("short_url", shortURL),
+			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errRetrievingURL})
 	}
 }
 
 func (h *URLHandler) handleInvalidRedirectURL(c *gin.Context, shortURL, originalURL string) {
-	h.logger.WithFields(logrus.Fields{
-		"short_url":    shortURL,
-		"original_url": originalURL,
-	}).Warn("Invalid original URL")
+	h.logger.Warn("Invalid original URL",
+		zap.String("short_url", shortURL),
+		zap.String("original_url", originalURL))
 	c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidRedirectURL})
 }
 
 func (h *URLHandler) logRedirect(c *gin.Context, shortURL, originalURL string) {
-	h.logger.WithFields(logrus.Fields{
-		"short_url":    shortURL,
-		"original_url": originalURL,
-		"ip":           c.ClientIP(),
-		"user_agent":   c.Request.UserAgent(),
-	}).Info("Redirecting")
+	h.logger.Info("Redirecting",
+		zap.String("short_url", shortURL),
+		zap.String("original_url", originalURL),
+		zap.String("ip", c.ClientIP()),
+		zap.String("user_agent", c.Request.UserAgent()))
 }

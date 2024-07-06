@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -14,6 +13,7 @@ import (
 	"go-url-shortening/services"
 	"go-url-shortening/services/mocks"
 	"go-url-shortening/types"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +27,7 @@ func TestNewURLHandler(t *testing.T) {
 		name        string
 		service     services.URLService
 		cfg         *config.Config
-		logger      *logrus.Logger
+		logger      *zap.Logger
 		limiter     *rate.Limiter
 		expectedErr string
 	}{
@@ -40,7 +40,7 @@ func TestNewURLHandler(t *testing.T) {
 				RequestTimeout: 5 * time.Second,
 				ServerPort:     ":3000",
 			},
-			logger:      logrus.New(),
+			logger:      zap.NewNop(),
 			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "",
 		},
@@ -48,7 +48,7 @@ func TestNewURLHandler(t *testing.T) {
 			name:        "Nil service",
 			service:     nil,
 			cfg:         &config.Config{},
-			logger:      logrus.New(),
+			logger:      zap.NewNop(),
 			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "service cannot be nil",
 		},
@@ -56,7 +56,7 @@ func TestNewURLHandler(t *testing.T) {
 			name:        "Nil config",
 			service:     &mocks.MockURLService{},
 			cfg:         nil,
-			logger:      logrus.New(),
+			logger:      zap.NewNop(),
 			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "config cannot be nil",
 		},
@@ -72,7 +72,7 @@ func TestNewURLHandler(t *testing.T) {
 			name:        "Nil limiter",
 			service:     &mocks.MockURLService{},
 			cfg:         &config.Config{},
-			logger:      logrus.New(),
+			logger:      zap.NewNop(),
 			limiter:     nil,
 			expectedErr: "limiter cannot be nil",
 		},
@@ -112,7 +112,7 @@ func TestNewURLHandlerWithCancelledContext(t *testing.T) {
 		RequestTimeout: 5 * time.Second,
 		ServerPort:     ":3000",
 	}
-	logger := logrus.New()
+	logger := zap.NewNop()
 	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,7 +133,7 @@ func TestNewURLHandlerReturnsCorrectInterface(t *testing.T) {
 		RequestTimeout: 5 * time.Second,
 		ServerPort:     ":3000",
 	}
-	logger := logrus.New()
+	logger := zap.NewNop()
 	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 
 	handler, err := NewURLHandler(context.Background(), service, cfg, logger, limiter)
@@ -153,7 +153,7 @@ func setupTestHandler() (URLHandlerInterface, error) {
 		ServerPort:     ":3000",
 	}
 	mockService := &mocks.MockURLService{}
-	logger := logrus.New()
+	logger := zap.NewNop()
 	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 	return NewURLHandler(context.Background(), mockService, cfg, logger, limiter)
 }

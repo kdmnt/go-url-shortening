@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -12,8 +11,8 @@ import (
 	"go-url-shortening/services"
 	"go-url-shortening/services/mocks"
 	"go-url-shortening/types"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,8 +29,7 @@ func TestRedirectURL(t *testing.T) {
 		ServerPort:     ":3000",
 	}
 
-	mockLogger := logrus.New()
-	mockLogger.SetOutput(io.Discard) // Discard log output during tests
+	mockLogger := zap.NewNop()
 
 	tests := []struct {
 		name           string

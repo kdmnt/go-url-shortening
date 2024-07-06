@@ -2,20 +2,24 @@ package main
 
 import (
 	"flag"
-	"github.com/sirupsen/logrus"
 	"go-url-shortening/config"
 	"go-url-shortening/server"
+	"go.uber.org/zap"
 )
 
-var logger *logrus.Logger
+var logger *zap.Logger
 
 func init() {
-	logger = logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	logger.SetLevel(logrus.InfoLevel)
+	var err error
+	logger, err = zap.NewProduction()
+	if err != nil {
+		panic("Failed to initialize zap logger: " + err.Error())
+	}
 }
 
 func main() {
+	defer logger.Sync()
+
 	disableRateLimit := flag.Bool("disable-rate-limit", false, "Disable rate limiting for performance testing")
 	flag.Parse()
 
@@ -24,7 +28,7 @@ func main() {
 
 	logger.Info("Starting URL Shortener application...")
 	if err := server.Run(logger, cfg); err != nil {
-		logger.WithError(err).Fatal("Application error")
+		logger.Fatal("Application error", zap.Error(err))
 	}
 	logger.Info("URL Shortener application stopped.")
 }

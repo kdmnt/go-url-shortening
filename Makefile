@@ -54,16 +54,17 @@ vet:
 
 help:
 	@echo "Choose a command run:"
-	@echo "  make build          Build the binary"
-	@echo "  make test           Run tests"
-	@echo "  make clean          Clean the build and test artifacts"
-	@echo "  make run            Build and run the binary"
-	@echo "  make deps           Install dependencies"
-	@echo "  make docker-build   Build Docker image"
-	@echo "  make docker-up      Start Docker containers"
-	@echo "  make docker-down    Stop Docker containers"
-	@echo "  make coverage       Generate test coverage report"
-	@echo "  make vet            Run go vet for static analysis"
+	@echo "  make build          	Build the binary"
+	@echo "  make test           	Run unit tests"
+	@echo "  make integration-test	Run integration tests"
+	@echo "  make clean          	Clean the build and test artifacts"
+	@echo "  make run            	Build and run the binary"
+	@echo "  make deps           	Install dependencies"
+	@echo "  make docker-build   	Build Docker image"
+	@echo "  make docker-up      	Start Docker containers"
+	@echo "  make docker-down    	Stop Docker containers"
+	@echo "  make coverage       	Generate test coverage report"
+	@echo "  make vet            	Run go vet for static analysis"
 
 .PHONY: all build test clean run deps docker-build docker-up docker-down lint coverage vet help
 

@@ -2,18 +2,18 @@
 package handlers
 
 import (
-	"github.com/sirupsen/logrus"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // HealthCheck handles the health check endpoint.
 // It returns a 200 OK status to indicate that the service is up and running.
 func (h *URLHandler) HealthCheck(c *gin.Context) {
-	h.logger.WithFields(logrus.Fields{
-		"ip":         c.ClientIP(),
-		"user_agent": c.Request.UserAgent(),
-	}).Info("Health check request")
+	h.logger.Info("Health check request",
+		zap.String("ip", c.ClientIP()),
+		zap.String("user_agent", c.Request.UserAgent()),
+	)
 	c.String(http.StatusOK, "OK")
 }

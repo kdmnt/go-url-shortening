@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
 	"go-url-shortening/config"
@@ -55,18 +55,18 @@ func sendRequest(t *testing.T, server *httptest.Server, method, path string, bod
 	return resp, respBody
 }
 
-func setupTestEnvironment(t *testing.T, storageCapacity ...int) (*httptest.Server, func(), *logrus.Logger, *gin.Engine, *config.Config) {
+func setupTestEnvironment(t *testing.T, storageCapacity ...int) (*httptest.Server, func(), *zap.Logger, *gin.Engine, *config.Config) {
 	cfg := config.DefaultConfig()
 	capacity := 1000000
 	if len(storageCapacity) > 0 {
 		capacity = storageCapacity[0]
 	}
-	store := storage.NewInMemoryStorage(capacity, logrus.New())
+	logger, _ := zap.NewDevelopment()
+	store := storage.NewInMemoryStorage(capacity, logger)
 	urlService := services.NewURLService(store)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-	logger := logrus.New()
 	limiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.RateLimit)), cfg.RateLimit)
 	urlHandler, err := handlers.NewURLHandler(ctx, urlService, cfg, logger, limiter)
 	require.NoError(t, err, "Failed to create URLHandler")
@@ -275,7 +275,8 @@ func TestIntegration(t *testing.T) {
 	t.Run("Extensive Modifications", func(t *testing.T) {
 		t.Parallel()
 		// Create a new storage, service, and handler for this test
-		testStore := storage.NewInMemoryStorage(1000000, logrus.New())
+		testLogger, _ := zap.NewDevelopment()
+		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
 		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.RateLimit)), cfg.RateLimit)
 		testHandler, err := handlers.NewURLHandler(context.Background(), testService, cfg, logger, testLimiter)
@@ -461,10 +462,10 @@ func TestIntegration(t *testing.T) {
 		t.Parallel()
 		// Create a new test environment
 		testCfg := config.DefaultConfig()
-		testStore := storage.NewInMemoryStorage(1000000, logrus.New())
+		testLogger, _ := zap.NewDevelopment()
+		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
 		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(testCfg.RateLimit)), testCfg.RateLimit)
-		testLogger := logrus.New()
 		testHandler, err := handlers.NewURLHandler(context.Background(), testService, testCfg, testLogger, testLimiter)
 		assert.NoError(t, err)
 

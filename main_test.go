@@ -1,20 +1,18 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestInit(t *testing.T) {
 	// Assert that logger is properly initialized
 	assert.NotNil(t, logger)
-	assert.IsType(t, &logrus.Logger{}, logger)
-
-	// Check if the formatter is JSONFormatter
-	assert.IsType(t, &logrus.JSONFormatter{}, logger.Formatter)
+	assert.IsType(t, (*zap.Logger)(nil), logger)
 
 	// Check if the log level is set to InfoLevel
-	assert.Equal(t, logrus.InfoLevel, logger.Level)
+	assert.True(t, logger.Core().Enabled(zapcore.InfoLevel))
 }

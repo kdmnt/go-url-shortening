@@ -10,22 +10,21 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"go-url-shortening/config"
 	"go-url-shortening/handlers/mocks"
 	"go-url-shortening/storage"
+	"go.uber.org/zap"
 )
 
-var setupURLHandlerFunc func(ctx context.Context, cfg *config.Config, store storage.Storage, logger *logrus.Logger) (handlers.URLHandlerInterface, error)
+var setupURLHandlerFunc func(ctx context.Context, cfg *config.Config, store storage.Storage, logger *zap.Logger) (handlers.URLHandlerInterface, error)
 
 func init() {
 	setupURLHandlerFunc = setupURLHandler
 }
 
 func TestRun(t *testing.T) {
-	logger := logrus.New()
-	logger.SetOutput(os.Stdout)
+	logger := zap.NewNop()
 
 	cfg := config.DefaultConfig()
 	cfg.ServerPort = ":3001" // Use a different port to avoid conflicts
@@ -40,7 +39,7 @@ func TestRun(t *testing.T) {
 
 	// Replace setupURLHandlerFunc with a test function
 	originalSetupURLHandlerFunc := setupURLHandlerFunc
-	setupURLHandlerFunc = func(ctx context.Context, cfg *config.Config, store storage.Storage, logger *logrus.Logger) (handlers.URLHandlerInterface, error) {
+	setupURLHandlerFunc = func(ctx context.Context, cfg *config.Config, store storage.Storage, logger *zap.Logger) (handlers.URLHandlerInterface, error) {
 		return mockHandler, nil
 	}
 	defer func() { setupURLHandlerFunc = originalSetupURLHandlerFunc }()
@@ -75,8 +74,8 @@ func TestRun(t *testing.T) {
 
 func TestSetupURLHandler(t *testing.T) {
 	cfg := config.DefaultConfig()
-	store := storage.NewInMemoryStorage(1000000, logrus.New())
-	logger := logrus.New()
+	logger := zap.NewNop()
+	store := storage.NewInMemoryStorage(1000000, logger)
 
 	ctx := context.Background()
 	handler, err := setupURLHandler(ctx, cfg, store, logger)
@@ -87,8 +86,8 @@ func TestSetupURLHandler(t *testing.T) {
 
 func TestSetupRouter(t *testing.T) {
 	cfg := config.DefaultConfig()
-	store := storage.NewInMemoryStorage(1000000, logrus.New())
-	logger := logrus.New()
+	logger := zap.NewNop()
+	store := storage.NewInMemoryStorage(1000000, logger)
 
 	ctx := context.Background()
 	handler, err := setupURLHandler(ctx, cfg, store, logger)
@@ -134,7 +133,7 @@ func TestStartServer(t *testing.T) {
 	cfg := config.DefaultConfig()
 	router := gin.New()
 	server := setupServer(cfg, router)
-	logger := logrus.New()
+	logger := zap.NewNop()
 
 	// Start the server in a goroutine
 	go startServer(server, logger)
@@ -156,7 +155,7 @@ func TestStartServer(t *testing.T) {
 func TestWaitForShutdown(t *testing.T) {
 	cfg := config.DefaultConfig()
 	ctx := context.Background()
-	logger := logrus.New()
+	logger := zap.NewNop()
 	mockHandler := &mocks.MockURLHandler{}
 	mockHandler.On("HealthCheck", mock.Anything).Run(func(args mock.Arguments) {
 		c := args.Get(0).(*gin.Context)

@@ -6,10 +6,10 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/sirupsen/logrus"
 	"go-url-shortening/config"
 	"go-url-shortening/services"
 	"go-url-shortening/types"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 	"net/http"
 )
@@ -57,7 +57,7 @@ func (h *URLHandler) handleError(c *gin.Context, err error, customMessages map[e
 		statusCode = http.StatusRequestTimeout
 		errorMessage = customMessages[context.DeadlineExceeded]
 	default:
-		h.logger.WithError(err).Error("Unexpected error")
+		h.logger.Error("Unexpected error", zap.Error(err))
 		statusCode = http.StatusInternalServerError
 		errorMessage = customMessages[err]
 		if errorMessage == "" {
@@ -74,7 +74,7 @@ type URLHandler struct {
 	validate *validator.Validate
 	limiter  *rate.Limiter
 	config   *config.Config
-	logger   *logrus.Logger
+	logger   *zap.Logger
 }
 
 // NewURLHandler creates and returns a new URLHandler instance.
@@ -88,7 +88,7 @@ type URLHandler struct {
 //
 // Returns:
 //   - A pointer to a new URLHandler instance and an error if initialization fails.
-func NewURLHandler(ctx context.Context, service services.URLService, cfg *config.Config, logger *logrus.Logger, limiter *rate.Limiter) (URLHandlerInterface, error) {
+func NewURLHandler(ctx context.Context, service services.URLService, cfg *config.Config, logger *zap.Logger, limiter *rate.Limiter) (URLHandlerInterface, error) {
 	if service == nil {
 		return nil, errors.New("service cannot be nil")
 	}
@@ -133,14 +133,14 @@ func (h *URLHandler) CreateShortURL(c *gin.Context) {
 	var input types.URLRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		h.logger.WithError(err).WithField("input", input).Error("Error decoding request body")
+		h.logger.Error("Error decoding request body", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": invalidRequestBody})
 		return
 	}
 
 	// Validate the input
 	if err := h.validate.Struct(input); err != nil {
-		h.logger.WithError(err).WithField("input", input).Error("Invalid input")
+		h.logger.Error("Invalid input", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": invalidURLProvided})
 		return
 	}
@@ -204,13 +204,13 @@ func (h *URLHandler) UpdateURL(c *gin.Context) {
 	var input types.URLRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		h.logger.WithError(err).WithField("input", input).Error("Error decoding request body")
+		h.logger.Error("Error decoding request body", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
 	if err := h.validate.Struct(input); err != nil {
-		h.logger.WithError(err).WithField("input", input).Error("Invalid input")
+		h.logger.Error("Invalid input", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL provided"})
 		return
 	}
