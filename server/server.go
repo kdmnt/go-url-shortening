@@ -33,9 +33,17 @@ func Run(logger *zap.Logger, cfg *config.Config) error {
 	router := setupRouter(urlHandler, cfg)
 	server := setupServer(cfg, router)
 
-	go startServer(server, logger)
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- startServer(server, logger)
+	}()
 
-	return waitForShutdown(ctx, server, logger)
+	select {
+	case err := <-errChan:
+		return err
+	case <-time.After(100 * time.Millisecond):
+		return waitForShutdown(ctx, server, logger)
+	}
 }
 
 // setupURLHandler creates and configures the URL handler with necessary dependencies.
@@ -74,12 +82,15 @@ func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 
 // startServer begins listening and serving HTTP requests.
 // It logs any errors that occur during server operation.
-func startServer(srv *http.Server, logger *zap.Logger) {
+func startServer(srv *http.Server, logger *zap.Logger) error {
 	logger.Debug("Starting server", zap.String("address", srv.Addr))
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	err := srv.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
 		logger.Error("Server error", zap.Error(err))
+		return err
 	}
 	logger.Debug("Server stopped")
+	return nil
 }
 
 // waitForShutdown blocks until the server receives an interrupt signal, then initiates a graceful shutdown.

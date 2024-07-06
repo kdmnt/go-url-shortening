@@ -72,6 +72,31 @@ func TestRun(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
+func TestRunServerStartupFailure(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	cfg := config.DefaultConfig()
+	cfg.ServerPort = ":invalid" // Invalid port to force startup failure
+
+	// Create a context with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Run the server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- Run(logger, cfg)
+	}()
+
+	// Wait for either the error or the timeout
+	select {
+	case err := <-errChan:
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "listen tcp: lookup tcp/invalid: unknown port")
+	case <-ctx.Done():
+		t.Fatal("Test timed out")
+	}
+}
+
 func TestSetupURLHandler(t *testing.T) {
 	cfg := config.DefaultConfig()
 	logger := zap.NewNop()
