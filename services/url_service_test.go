@@ -2,14 +2,13 @@ package services
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"go-url-shortening/storage"
 	"go-url-shortening/storage/mocks"
 	"go-url-shortening/types"
+	"sync"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 func TestCreateShortURL(t *testing.T) {
@@ -34,20 +33,13 @@ func TestCreateShortURL(t *testing.T) {
 	})
 
 	t.Run("ShortURLExists", func(t *testing.T) {
-		existingShortURL := "existingShortURL"
-		existingURLData := types.URLData{
-			ShortURL:    existingShortURL,
-			OriginalURL: originalURL,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
-		mockStorage.On("GetShortURL", ctx, originalURL).Return(existingShortURL, nil).Once()
-		mockStorage.On("GetURLData", ctx, existingShortURL).Return(existingURLData, nil).Once()
+		existingShortURL := "abc123"
 
-		urlData, err := service.CreateShortURL(ctx, originalURL)
+		mockStorage.On("GetShortURL", ctx, originalURL).Return(existingShortURL, storage.ErrShortURLExists).Once()
 
-		assert.NoError(t, err)
-		assert.Equal(t, existingURLData, urlData)
+		_, err := service.CreateShortURL(ctx, originalURL)
+
+		assert.Equal(t, ErrShortURLExists, err)
 		mockStorage.AssertExpectations(t)
 	})
 
@@ -142,4 +134,31 @@ func TestDeleteURL(t *testing.T) {
 		assert.Equal(t, ErrShortURLNotFound, err)
 		mockStorage.AssertExpectations(t)
 	})
+}
+
+func TestConcurrentAccess(t *testing.T) {
+	mockStorage := new(mocks.MockStorage)
+	service := NewURLService(mockStorage)
+
+	ctx := context.Background()
+	originalURL := "https://example.com"
+
+	mockStorage.On("GetShortURL", ctx, originalURL).Return("", storage.ErrShortURLNotFound)
+	mockStorage.On("Create", ctx, mock.AnythingOfType("types.URLData")).Return(nil)
+
+	var wg sync.WaitGroup
+	concurrentRequests := 100
+
+	for i := 0; i < concurrentRequests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := service.CreateShortURL(ctx, originalURL)
+			assert.NoError(t, err)
+		}()
+	}
+
+	wg.Wait()
+	mockStorage.AssertNumberOfCalls(t, "GetShortURL", concurrentRequests)
+	mockStorage.AssertNumberOfCalls(t, "Create", concurrentRequests)
 }
