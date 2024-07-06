@@ -179,4 +179,98 @@ func TestInMemoryStorage(t *testing.T) {
 
 		assert.Equal(t, 0, storage.count, "All entries should have been deleted")
 	})
+
+	t.Run("GetShortURL", func(t *testing.T) {
+		logger := zap.NewNop()
+		storage := NewInMemoryStorage(10, logger)
+
+		// Create a URL
+		originalURL := "https://example.com"
+		shortURL := "abc123"
+		err := storage.Create(ctx, types.URLData{ShortURL: shortURL, OriginalURL: originalURL})
+		require.NoError(t, err)
+
+		// Test getting existing short URL
+		gotShortURL, err := storage.GetShortURL(ctx, originalURL)
+		assert.NoError(t, err)
+		assert.Equal(t, shortURL, gotShortURL)
+
+		// Test getting non-existent URL
+		_, err = storage.GetShortURL(ctx, "https://nonexistent.com")
+		assert.Equal(t, ErrShortURLNotFound, err)
+
+		// Test context cancellation
+		cancelCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err = storage.GetShortURL(cancelCtx, originalURL)
+		assert.Equal(t, context.Canceled, err)
+	})
+
+	t.Run("Storage count accuracy", func(t *testing.T) {
+		logger := zap.NewNop()
+		storage := NewInMemoryStorage(10, logger)
+
+		// Create entries
+		for i := 0; i < 5; i++ {
+			err := storage.Create(ctx, types.URLData{ShortURL: fmt.Sprintf("short%d", i), OriginalURL: fmt.Sprintf("https://example%d.com", i)})
+			require.NoError(t, err)
+		}
+		assert.Equal(t, 5, storage.count)
+
+		// Update an entry (shouldn't change count)
+		err := storage.Update(ctx, types.URLData{ShortURL: "short0", OriginalURL: "https://updated.com"})
+		require.NoError(t, err)
+		assert.Equal(t, 5, storage.count)
+
+		// Delete an entry
+		err = storage.Delete(ctx, "short1")
+		require.NoError(t, err)
+		assert.Equal(t, 4, storage.count)
+
+		// Try to create a duplicate (shouldn't change count)
+		err = storage.Create(ctx, types.URLData{ShortURL: "short2", OriginalURL: "https://duplicate.com"})
+		assert.Equal(t, ErrShortURLExists, err)
+		assert.Equal(t, 4, storage.count)
+	})
+
+	t.Run("Concurrent operations with specific scenarios", func(t *testing.T) {
+		logger := zap.NewNop()
+		storage := NewInMemoryStorage(1000, logger)
+		var wg sync.WaitGroup
+		numOperations := 100
+
+		// Scenario 1: Concurrent creations of the same short URL
+		for i := 0; i < numOperations; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := storage.Create(context.Background(), types.URLData{ShortURL: "concurrent", OriginalURL: "https://example.com"})
+				if err != nil && err != ErrShortURLExists {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}()
+		}
+		wg.Wait()
+		assert.Equal(t, 1, storage.count, "Only one entry should have been created")
+
+		// Scenario 2: Concurrent reads and updates
+		err := storage.Create(context.Background(), types.URLData{ShortURL: "readupdate", OriginalURL: "https://original.com"})
+		require.NoError(t, err)
+
+		for i := 0; i < numOperations; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				if i%2 == 0 {
+					_, err := storage.GetURLData(context.Background(), "readupdate")
+					assert.NoError(t, err)
+				} else {
+					err := storage.Update(context.Background(), types.URLData{ShortURL: "readupdate", OriginalURL: fmt.Sprintf("https://updated%d.com", i)})
+					assert.NoError(t, err)
+				}
+			}(i)
+		}
+		wg.Wait()
+		assert.Equal(t, 2, storage.count, "Count should remain 2 after concurrent reads and updates")
+	})
 }
