@@ -2,7 +2,7 @@
 
 This is a simple URL shortener API built with Go. It provides endpoints to create, read, update, delete and redirect shortened URLs.
 
-This project leverages a robust tech stack including [Go](https://github.com/golang/go) for the core implementation, [Gin](https://github.com/gin-gonic/gin) as the web framework, [validator](https://github.com/go-playground/validator) for input validation, [rate](https://pkg.go.dev/golang.org/x/time/rate) for rate limiting, [logrus](https://github.com/sirupsen/logrus) for logging, and [testify](https://github.com/stretchr/testify) for testing (assertions/mocks). It's containerized with [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) and performance-tested using [k6](https://k6.io/).
+This project leverages a robust tech stack including [Go](https://github.com/golang/go) for the core implementation, [Gin](https://github.com/gin-gonic/gin) as the web framework, [validator](https://github.com/go-playground/validator) for input validation, [rate](https://pkg.go.dev/golang.org/x/time/rate) for rate limiting, [zap](https://github.com/uber-go/zap) for logging, and [testify](https://github.com/stretchr/testify) for testing (assertions/mocks). It's containerized with [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/) and performance-tested using [k6](https://k6.io/).
 
 ## Getting Started
 
