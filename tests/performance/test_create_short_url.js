@@ -109,7 +109,7 @@ export function handleSummary(data) {
   console.log(`95th percentile response time: ${data.metrics.http_req_duration.values['p(95)'].toFixed(2)}ms`);
   console.log(`Median response time: ${data.metrics.http_req_duration.values.med.toFixed(2)}ms`);
   console.log(`Max response time: ${data.metrics.http_req_duration.values.max.toFixed(2)}ms`);
-  console.log(`Requests per second: ${(data.metrics.http_reqs.values.rate / (data.state.testRunDurationMs / 1000)).toFixed(2)}`);
+  console.log(`Requests per second: ${data.metrics.http_reqs.values.rate.toFixed(2)}`);
   console.log(`Error rate: ${data.metrics.errors.values.rate.toFixed(4)}`);
 
   return {};
