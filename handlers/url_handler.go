@@ -118,7 +118,7 @@ func NewURLHandler(ctx context.Context, service services.URLService, cfg *config
 }
 
 // CreateShortURL handles the creation of a new shortened URL.
-// It validates the input, generates a short URL, and stores it in the database.
+// It validates the input, checks for existing short URL, and stores it in the database if it doesn't exist.
 func (h *URLHandler) CreateShortURL(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), h.config.RequestTimeout)
 	defer cancel()
@@ -139,9 +139,19 @@ func (h *URLHandler) CreateShortURL(c *gin.Context) {
 	}
 
 	urlData, err := h.service.CreateShortURL(ctx, input.URL)
+	response := types.URLResponse{
+		ShortURL:    urlData.ShortURL,
+		OriginalURL: urlData.OriginalURL,
+		CreatedAt:   urlData.CreatedAt,
+		UpdatedAt:   urlData.UpdatedAt,
+	}
+
 	if err != nil {
+		if errors.Is(err, services.ErrShortURLExists) {
+			c.JSON(http.StatusConflict, response)
+			return
+		}
 		h.handleError(c, err, map[error]string{
-			services.ErrShortURLExists:         shortURLExists,
 			services.ErrStorageCapacityReached: storageCapacityFull,
 			context.DeadlineExceeded:           errorTimeout,
 			nil:                                errorCreatingURL,
@@ -149,12 +159,6 @@ func (h *URLHandler) CreateShortURL(c *gin.Context) {
 		return
 	}
 
-	response := types.URLResponse{
-		ShortURL:    urlData.ShortURL,
-		OriginalURL: urlData.OriginalURL,
-		CreatedAt:   urlData.CreatedAt,
-		UpdatedAt:   urlData.UpdatedAt,
-	}
 	c.JSON(http.StatusCreated, response)
 }
 

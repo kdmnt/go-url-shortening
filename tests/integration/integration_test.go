@@ -384,7 +384,7 @@ func TestIntegration(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		resp, err = http.DefaultClient.Do(req)
 		assert.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		assert.Equal(t, http.StatusConflict, resp.StatusCode)
 		var secondResp types.URLResponse
 		json.NewDecoder(resp.Body).Decode(&secondResp)
 

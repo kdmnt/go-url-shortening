@@ -59,7 +59,7 @@ func (s *urlService) CreateShortURL(ctx context.Context, originalURL string) (ty
 		if err != nil {
 			return types.URLData{}, handleStorageError(err)
 		}
-		return urlData, nil
+		return urlData, ErrShortURLExists
 	}
 	if !errors.Is(err, storage.ErrShortURLNotFound) {
 		return types.URLData{}, handleStorageError(err)
