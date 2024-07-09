@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 
 	"go-url-shortening/config"
 	"go-url-shortening/handlers"
@@ -74,8 +73,7 @@ func setupTestEnvironment(t *testing.T, storageCapacity ...int) (*httptest.Serve
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-	limiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.RateLimit)), cfg.RateLimit)
-	urlHandler, err := handlers.NewURLHandler(ctx, urlService, cfg, logger, limiter)
+	urlHandler, err := handlers.NewURLHandler(ctx, urlService, cfg, logger)
 	require.NoError(t, err, "Failed to create URLHandler")
 
 	gin.SetMode(gin.TestMode)
@@ -285,8 +283,7 @@ func TestIntegration(t *testing.T) {
 		testLogger := zap.NewNop()
 		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
-		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(cfg.RateLimit)), cfg.RateLimit)
-		testHandler, err := handlers.NewURLHandler(context.Background(), testService, cfg, logger, testLimiter)
+		testHandler, err := handlers.NewURLHandler(context.Background(), testService, cfg, logger)
 		assert.NoError(t, err)
 
 		testRouter := gin.New()
@@ -471,8 +468,7 @@ func TestIntegration(t *testing.T) {
 		testLogger := zap.NewNop()
 		testStore := storage.NewInMemoryStorage(1000000, testLogger)
 		testService := services.NewURLService(testStore)
-		testLimiter := rate.NewLimiter(rate.Every(time.Second/time.Duration(testCfg.RateLimit)), testCfg.RateLimit)
-		testHandler, err := handlers.NewURLHandler(context.Background(), testService, testCfg, testLogger, testLimiter)
+		testHandler, err := handlers.NewURLHandler(context.Background(), testService, testCfg, testLogger)
 		assert.NoError(t, err)
 
 		testRouter := gin.New()

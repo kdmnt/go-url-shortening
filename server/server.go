@@ -14,7 +14,6 @@ import (
 	"go-url-shortening/services"
 	"go-url-shortening/storage"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 )
 
 // Run initializes and starts the server, setting up all necessary components.
@@ -53,9 +52,8 @@ func setupURLHandler(ctx context.Context, cfg *config.Config, store storage.Stor
 	defer cancel()
 
 	urlService := services.NewURLService(store)
-	limiter := rate.NewLimiter(rate.Every(cfg.RatePeriod), cfg.RateLimit)
 
-	handler, err := handlers.NewURLHandler(handlerCtx, urlService, cfg, logger, limiter)
+	handler, err := handlers.NewURLHandler(handlerCtx, urlService, cfg, logger)
 	if err != nil {
 		logger.Error("Failed to create URL handler", zap.Error(err))
 		return nil, err

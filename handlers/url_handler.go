@@ -10,7 +10,6 @@ import (
 	"go-url-shortening/services"
 	"go-url-shortening/types"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 	"net/http"
 )
 
@@ -72,23 +71,21 @@ func (h *URLHandler) handleError(c *gin.Context, err error, customMessages map[e
 type URLHandler struct {
 	service  services.URLService
 	validate *validator.Validate
-	limiter  *rate.Limiter
 	config   *config.Config
 	logger   *zap.Logger
 }
 
 // NewURLHandler creates and returns a new URLHandler instance.
-// It initializes the handler with the provided storage, a new validator,
-// and a rate limiter configured with the settings from the config.
-//
 // Parameters:
 //   - ctx: A context.Context for cancellation during initialization.
-//   - store: An implementation of the storage.Storage interface for URL operations.
+//   - service: An implementation of the services.URLService interface for URL operations.
+//   - cfg: A pointer to the Config struct containing application settings.
+//   - logger: A pointer to a zap.Logger for logging.
 //   - cfg: A pointer to the Config struct containing application settings.
 //
 // Returns:
 //   - A pointer to a new URLHandler instance and an error if initialization fails.
-func NewURLHandler(ctx context.Context, service services.URLService, cfg *config.Config, logger *zap.Logger, limiter *rate.Limiter) (URLHandlerInterface, error) {
+func NewURLHandler(ctx context.Context, service services.URLService, cfg *config.Config, logger *zap.Logger) (URLHandlerInterface, error) {
 	if service == nil {
 		return nil, errors.New("service cannot be nil")
 	}
@@ -98,9 +95,6 @@ func NewURLHandler(ctx context.Context, service services.URLService, cfg *config
 	if logger == nil {
 		return nil, errors.New("logger cannot be nil")
 	}
-	if limiter == nil {
-		return nil, errors.New("limiter cannot be nil")
-	}
 	if cfg.RateLimit <= 0 || cfg.RatePeriod <= 0 {
 		return nil, errors.New("invalid rate limit configuration")
 	}
@@ -108,7 +102,6 @@ func NewURLHandler(ctx context.Context, service services.URLService, cfg *config
 	handler := &URLHandler{
 		service:  service,
 		validate: validator.New(),
-		limiter:  rate.NewLimiter(rate.Every(cfg.RatePeriod), cfg.RateLimit),
 		config:   cfg,
 		logger:   logger,
 	}

@@ -14,7 +14,6 @@ import (
 	"go-url-shortening/services/mocks"
 	"go-url-shortening/types"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,7 +27,6 @@ func TestNewURLHandler(t *testing.T) {
 		service     services.URLService
 		cfg         *config.Config
 		logger      *zap.Logger
-		limiter     *rate.Limiter
 		expectedErr string
 	}{
 		{
@@ -41,7 +39,6 @@ func TestNewURLHandler(t *testing.T) {
 				ServerPort:     ":3000",
 			},
 			logger:      zap.NewNop(),
-			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "",
 		},
 		{
@@ -49,7 +46,6 @@ func TestNewURLHandler(t *testing.T) {
 			service:     nil,
 			cfg:         &config.Config{},
 			logger:      zap.NewNop(),
-			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "service cannot be nil",
 		},
 		{
@@ -57,7 +53,6 @@ func TestNewURLHandler(t *testing.T) {
 			service:     &mocks.MockURLService{},
 			cfg:         nil,
 			logger:      zap.NewNop(),
-			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "config cannot be nil",
 		},
 		{
@@ -65,22 +60,13 @@ func TestNewURLHandler(t *testing.T) {
 			service:     &mocks.MockURLService{},
 			cfg:         &config.Config{},
 			logger:      nil,
-			limiter:     rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedErr: "logger cannot be nil",
-		},
-		{
-			name:        "Nil limiter",
-			service:     &mocks.MockURLService{},
-			cfg:         &config.Config{},
-			logger:      zap.NewNop(),
-			limiter:     nil,
-			expectedErr: "limiter cannot be nil",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, err := NewURLHandler(context.Background(), tt.service, tt.cfg, tt.logger, tt.limiter)
+			handler, err := NewURLHandler(context.Background(), tt.service, tt.cfg, tt.logger)
 
 			if tt.expectedErr != "" {
 				assert.Error(t, err)
@@ -96,7 +82,6 @@ func TestNewURLHandler(t *testing.T) {
 				assert.Equal(t, tt.service, concreteHandler.service)
 				assert.Equal(t, tt.cfg, concreteHandler.config)
 				assert.Equal(t, tt.logger, concreteHandler.logger)
-				assert.Equal(t, tt.limiter, concreteHandler.limiter)
 				assert.NotNil(t, concreteHandler.validate)
 			}
 		})
@@ -112,12 +97,11 @@ func TestNewURLHandlerWithCancelledContext(t *testing.T) {
 		ServerPort:     ":3000",
 	}
 	logger := zap.NewNop()
-	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	handler, err := NewURLHandler(ctx, service, cfg, logger, limiter)
+	handler, err := NewURLHandler(ctx, service, cfg, logger)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
@@ -133,9 +117,8 @@ func TestNewURLHandlerReturnsCorrectInterface(t *testing.T) {
 		ServerPort:     ":3000",
 	}
 	logger := zap.NewNop()
-	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
 
-	handler, err := NewURLHandler(context.Background(), service, cfg, logger, limiter)
+	handler, err := NewURLHandler(context.Background(), service, cfg, logger)
 
 	require.NoError(t, err)
 	assert.NotNil(t, handler)
@@ -153,8 +136,7 @@ func setupTestHandler() (URLHandlerInterface, error) {
 	}
 	mockService := new(mocks.MockURLService)
 	logger := zap.NewNop()
-	limiter := rate.NewLimiter(rate.Every(time.Second), 10)
-	return NewURLHandler(context.Background(), mockService, cfg, logger, limiter)
+	return NewURLHandler(context.Background(), mockService, cfg, logger)
 }
 
 func TestCreateShortURL(t *testing.T) {

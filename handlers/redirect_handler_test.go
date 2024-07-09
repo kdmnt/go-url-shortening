@@ -12,7 +12,6 @@ import (
 	"go-url-shortening/services/mocks"
 	"go-url-shortening/types"
 	"go.uber.org/zap"
-	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +35,6 @@ func TestRedirectURL(t *testing.T) {
 		name           string
 		shortURL       string
 		mockGetURLData func(ctx context.Context, shortURL string) (types.URLData, error)
-		mockLimiter    *rate.Limiter
 		expectedStatus int
 		expectedURL    string
 		expectedBody   string
@@ -47,7 +45,6 @@ func TestRedirectURL(t *testing.T) {
 			mockGetURLData: func(ctx context.Context, shortURL string) (types.URLData, error) {
 				return types.URLData{OriginalURL: "https://example.com"}, nil
 			},
-			mockLimiter:    rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedStatus: http.StatusMovedPermanently,
 			expectedURL:    "https://example.com",
 		},
@@ -57,7 +54,6 @@ func TestRedirectURL(t *testing.T) {
 			mockGetURLData: func(ctx context.Context, shortURL string) (types.URLData, error) {
 				return types.URLData{OriginalURL: ""}, services.ErrShortURLNotFound
 			},
-			mockLimiter:    rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedStatus: http.StatusNotFound,
 			expectedBody:   `{"error":"Short URL not found"}`,
 		},
@@ -67,7 +63,6 @@ func TestRedirectURL(t *testing.T) {
 			mockGetURLData: func(ctx context.Context, shortURL string) (types.URLData, error) {
 				return types.URLData{OriginalURL: ""}, errors.New("service error")
 			},
-			mockLimiter:    rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody:   `{"error":"Error retrieving URL"}`,
 		},
@@ -77,7 +72,6 @@ func TestRedirectURL(t *testing.T) {
 			mockGetURLData: func(ctx context.Context, shortURL string) (types.URLData, error) {
 				return types.URLData{OriginalURL: "not-a-valid-url"}, nil
 			},
-			mockLimiter:    rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":"Invalid redirect URL"}`,
 		},
@@ -87,7 +81,6 @@ func TestRedirectURL(t *testing.T) {
 			mockGetURLData: func(ctx context.Context, shortURL string) (types.URLData, error) {
 				return types.URLData{OriginalURL: ""}, context.DeadlineExceeded
 			},
-			mockLimiter:    rate.NewLimiter(rate.Every(time.Second), 10),
 			expectedStatus: http.StatusRequestTimeout,
 			expectedBody:   `{"error":"Request timed out"}`,
 		},
@@ -98,7 +91,7 @@ func TestRedirectURL(t *testing.T) {
 			mockService := new(mocks.MockURLService)
 			mockService.On("GetURLData", mock.Anything, tt.shortURL).Return(tt.mockGetURLData(ctx, tt.shortURL))
 
-			handler, err := NewURLHandler(ctx, mockService, cfg, mockLogger, tt.mockLimiter)
+			handler, err := NewURLHandler(ctx, mockService, cfg, mockLogger)
 			require.NoError(t, err)
 
 			w := httptest.NewRecorder()
