@@ -1,5 +1,5 @@
-// Package utils provides utility functions for the URL shortener service.
-package utils
+// Package urlgen provides utility functions for the URL shortener service.
+package urlgen
 
 import (
 	"crypto/rand"
@@ -12,8 +12,8 @@ const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 // shortURLLength defines the length of the generated short URLs.
 const shortURLLength = 8
 
-// GenerateShortURL creates a new short URL string.
-func GenerateShortURL() (string, error) {
+// Generate creates a new short URL string.
+func Generate() (string, error) {
 	shortURL := make([]byte, shortURLLength)
 	charsetLength := big.NewInt(int64(len(charset)))
 

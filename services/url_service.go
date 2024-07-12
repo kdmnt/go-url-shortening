@@ -5,7 +5,7 @@ import (
 	"errors"
 	"go-url-shortening/storage"
 	"go-url-shortening/types"
-	"go-url-shortening/utils"
+	"go-url-shortening/urlgen"
 	"time"
 )
 
@@ -66,7 +66,7 @@ func (s *urlService) CreateShortURL(ctx context.Context, originalURL string) (ty
 	}
 
 	// Generate new short URL
-	shortURL, err := utils.GenerateShortURL()
+	shortURL, err := urlgen.Generate()
 	if err != nil {
 		return types.URLData{}, err
 	}

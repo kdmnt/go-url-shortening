@@ -1,4 +1,4 @@
-package utils
+package urlgen
 
 import (
 	"crypto/rand"
@@ -17,8 +17,8 @@ func (r *errorReader) Read([]byte) (n int, err error) {
 
 func TestGenerateShortURL(t *testing.T) {
 	t.Run("Basic Generation", func(t *testing.T) {
-		shortURL, err := GenerateShortURL()
-		require.NoError(t, err, "GenerateShortURL() should not return an error")
+		shortURL, err := Generate()
+		require.NoError(t, err, "Generate() should not return an error")
 		require.Len(t, shortURL, shortURLLength, "Generated short URL should have the correct length")
 		for _, char := range shortURL {
 			assert.Contains(t, charset, string(char), "Generated short URL should only contain valid characters")
@@ -29,8 +29,8 @@ func TestGenerateShortURL(t *testing.T) {
 		generatedURLs := make(map[string]int)
 		totalURLs := 1000000
 		for i := 0; i < totalURLs; i++ {
-			shortURL, err := GenerateShortURL()
-			require.NoError(t, err, "GenerateShortURL() should not return an error")
+			shortURL, err := Generate()
+			require.NoError(t, err, "Generate() should not return an error")
 			generatedURLs[shortURL]++
 		}
 
@@ -64,17 +64,17 @@ func TestGenerateShortURL(t *testing.T) {
 		rand.Reader = &errorReader{}
 		defer func() { rand.Reader = originalReader }()
 
-		_, err := GenerateShortURL()
-		assert.Error(t, err, "GenerateShortURL() should return an error when random number generation fails")
+		_, err := Generate()
+		assert.Error(t, err, "Generate() should return an error when random number generation fails")
 		assert.Contains(t, err.Error(), "mocked random number generation error", "Error message should contain the mocked error")
 	})
 }
 
-// BenchmarkGenerateShortURL measures the performance of the GenerateShortURL function.
+// BenchmarkGenerateShortURL measures the performance of the Generate function.
 // It's used to quantify the speed of short URL generation and detect performance regressions.
 func BenchmarkGenerateShortURL(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := GenerateShortURL()
+		_, err := Generate()
 		if err != nil {
 			b.Fatal(err)
 		}
