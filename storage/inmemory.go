@@ -68,7 +68,7 @@ func (s *InMemoryStorage) Create(ctx context.Context, urlData types.URLData) err
 			return ErrShortURLExists
 		}
 
-		urlData.CreatedAt = time.Now()
+		urlData.CreatedAt = time.Now().UTC()
 		urlData.UpdatedAt = urlData.CreatedAt
 		s.urls[urlData.ShortURL] = urlData
 		s.count++
@@ -139,7 +139,7 @@ func (s *InMemoryStorage) Update(ctx context.Context, urlData types.URLData) err
 
 		oldURLData := s.urls[urlData.ShortURL]
 		urlData.CreatedAt = oldURLData.CreatedAt
-		urlData.UpdatedAt = time.Now()
+		urlData.UpdatedAt = time.Now().UTC()
 		s.urls[urlData.ShortURL] = urlData
 		s.logger.Info("Updated shortURL",
 			zap.String("shortURL", urlData.ShortURL),
