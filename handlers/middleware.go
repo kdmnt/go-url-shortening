@@ -55,6 +55,8 @@ func (h *URLHandler) RateLimitMiddleware() gin.HandlerFunc {
 		ip := c.ClientIP()
 
 		mu.Lock()
+		defer mu.Unlock()
+
 		// Create a new rate limiter for this IP if it doesn't exist
 		if _, found := clients[ip]; !found {
 			clients[ip] = &client{
@@ -65,12 +67,10 @@ func (h *URLHandler) RateLimitMiddleware() gin.HandlerFunc {
 
 		// Check if this request is allowed by the rate limiter
 		if !clients[ip].limiter.Allow() {
-			mu.Unlock()
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Rate limit exceeded"})
 			c.Abort()
 			return
 		}
-		mu.Unlock()
 
 		c.Next()
 	}
