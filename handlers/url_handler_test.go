@@ -36,7 +36,7 @@ func TestNewURLHandler(t *testing.T) {
 				RateLimit:      10,
 				RatePeriod:     time.Second,
 				RequestTimeout: 5 * time.Second,
-				ServerPort:     ":3000",
+				ServerPort:     3000,
 			},
 			logger:      zap.NewNop(),
 			expectedErr: "",
@@ -94,7 +94,7 @@ func TestNewURLHandlerWithCancelledContext(t *testing.T) {
 		RateLimit:      10,
 		RatePeriod:     time.Second,
 		RequestTimeout: 5 * time.Second,
-		ServerPort:     ":3000",
+		ServerPort:     3000,
 	}
 	logger := zap.NewNop()
 
@@ -114,7 +114,7 @@ func TestNewURLHandlerReturnsCorrectInterface(t *testing.T) {
 		RateLimit:      10,
 		RatePeriod:     time.Second,
 		RequestTimeout: 5 * time.Second,
-		ServerPort:     ":3000",
+		ServerPort:     3000,
 	}
 	logger := zap.NewNop()
 
@@ -132,7 +132,7 @@ func setupTestHandler() (URLHandlerInterface, error) {
 		RateLimit:      10,
 		RatePeriod:     time.Second,
 		RequestTimeout: 5 * time.Second,
-		ServerPort:     ":3000",
+		ServerPort:     3000,
 	}
 	mockService := new(mocks.MockURLService)
 	logger := zap.NewNop()

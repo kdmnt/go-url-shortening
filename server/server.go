@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -73,7 +74,7 @@ func setupRouter(urlHandler handlers.URLHandlerInterface, cfg *config.Config) *g
 // setupServer creates and returns a new HTTP server with the given configuration and router.
 func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	return &http.Server{
-		Addr:    cfg.ServerPort,
+		Addr:    ":" + strconv.Itoa(cfg.ServerPort),
 		Handler: router,
 	}
 }

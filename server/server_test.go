@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ func TestRun(t *testing.T) {
 	logger := zap.NewNop()
 
 	cfg := config.DefaultConfig()
-	cfg.ServerPort = ":3001" // Use a different port to avoid conflicts
+	cfg.ServerPort = 3001 // Use a different port to avoid conflicts
 
 	// Create a mock URL handler
 	mockHandler := &mocks.MockURLHandler{}
@@ -59,7 +60,7 @@ func TestRun(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Make a request to the health check endpoint
-	resp, err := http.Get("http://localhost" + cfg.ServerPort + "/health")
+	resp, err := http.Get("http://localhost:" + strconv.Itoa(cfg.ServerPort) + "/health")
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestRun(t *testing.T) {
 func TestRunServerStartupFailure(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 	cfg := config.DefaultConfig()
-	cfg.ServerPort = ":invalid" // Invalid port to force startup failure
+	cfg.ServerPort = -1 // Invalid port to force startup failure
 
 	// Create a context with a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -92,7 +93,7 @@ func TestRunServerStartupFailure(t *testing.T) {
 	select {
 	case err := <-errChan:
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "listen tcp: lookup tcp/invalid: unknown port")
+		assert.Contains(t, err.Error(), "listen tcp: address -1: invalid port")
 	case <-ctx.Done():
 		t.Fatal("Test timed out")
 	}
@@ -149,20 +150,20 @@ func TestSetupRouter(t *testing.T) {
 
 func TestSetupServer(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.ServerPort = ":3002" // Use a different port to avoid conflicts
+	cfg.ServerPort = 3002 // Use a different port to avoid conflicts
 	w := httptest.NewRecorder()
 	_, router := gin.CreateTestContext(w)
 
 	server := setupServer(cfg, router)
 
 	assert.NotNil(t, server)
-	assert.Equal(t, cfg.ServerPort, server.Addr)
+	assert.Equal(t, ":"+strconv.Itoa(cfg.ServerPort), server.Addr)
 	assert.Equal(t, router, server.Handler)
 }
 
 func TestStartServer(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.ServerPort = ":3003" // Use a different port to avoid conflicts
+	cfg.ServerPort = 3003 // Use a different port to avoid conflicts
 	w := httptest.NewRecorder()
 	_, router := gin.CreateTestContext(w)
 	server := setupServer(cfg, router)

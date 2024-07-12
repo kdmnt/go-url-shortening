@@ -25,7 +25,7 @@ func TestRedirectURL(t *testing.T) {
 		RateLimit:      10,
 		RatePeriod:     time.Second,
 		RequestTimeout: 5 * time.Second,
-		ServerPort:     ":3000",
+		ServerPort:     3000,
 	}
 
 	mockLogger := zap.NewNop()

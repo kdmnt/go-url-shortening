@@ -8,7 +8,7 @@ type Config struct {
 	RateLimit        int
 	RatePeriod       time.Duration
 	RequestTimeout   time.Duration
-	ServerPort       string
+	ServerPort       int
 	DisableRateLimit bool
 }
 
@@ -19,7 +19,7 @@ func DefaultConfig() *Config {
 		RateLimit:        10,
 		RatePeriod:       time.Second,
 		RequestTimeout:   5 * time.Second,
-		ServerPort:       ":3000",
+		ServerPort:       3000,
 		DisableRateLimit: false,
 	}
 }
