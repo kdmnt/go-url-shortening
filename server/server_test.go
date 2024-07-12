@@ -168,9 +168,10 @@ func TestStartServer(t *testing.T) {
 	_, router := gin.CreateTestContext(w)
 	server := setupServer(cfg, router)
 	logger := zap.NewNop()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	// Start the server in a goroutine
-	go startServer(server, logger)
+	go startServer(ctx, server, logger)
 
 	// Give the server a moment to start
 	time.Sleep(100 * time.Millisecond)
@@ -181,7 +182,6 @@ func TestStartServer(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code) // Expect 404 as we haven't set up any routes
 
 	// Shutdown the server
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := server.Shutdown(ctx)
 	assert.NoError(t, err)
@@ -203,7 +203,7 @@ func TestWaitForShutdown(t *testing.T) {
 	server := setupServer(cfg, router)
 
 	// Start the server in a goroutine
-	go startServer(server, logger)
+	go startServer(ctx, server, logger)
 
 	// Simulate SIGINT
 	go func() {

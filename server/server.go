@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,16 +34,35 @@ func Run(logger *zap.Logger, cfg *config.Config) error {
 	router := setupRouter(urlHandler, cfg)
 	server := setupServer(cfg, router)
 
+	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
+
+	wg.Add(1)
 	go func() {
-		errChan <- startServer(server, logger)
+		defer wg.Done()
+		if err := startServer(ctx, server, logger); err != nil {
+			select {
+			case errChan <- err:
+			default:
+			}
+		}
+	}()
+
+	// Ensure the goroutine is cleaned up
+	defer func() {
+		cancel()
+		wg.Wait()
 	}()
 
 	select {
 	case err := <-errChan:
+		cancel()
+		wg.Wait()
 		return err
 	case <-time.After(100 * time.Millisecond):
-		return waitForShutdown(ctx, server, logger)
+		err := waitForShutdown(ctx, server, logger)
+		wg.Wait()
+		return err
 	}
 }
 
@@ -81,15 +101,27 @@ func setupServer(cfg *config.Config, router *gin.Engine) *http.Server {
 
 // startServer begins listening and serving HTTP requests.
 // It logs any errors that occur during server operation.
-func startServer(srv *http.Server, logger *zap.Logger) error {
+func startServer(ctx context.Context, srv *http.Server, logger *zap.Logger) error {
 	logger.Debug("Starting server", zap.String("address", srv.Addr))
-	err := srv.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
+
+	errChan := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Debug("Context cancelled, stopping server")
+		if err := srv.Shutdown(context.Background()); err != nil {
+			logger.Error("Error shutting down server", zap.Error(err))
+		}
+		return ctx.Err()
+	case err := <-errChan:
 		logger.Error("Server error", zap.Error(err))
 		return err
 	}
-	logger.Debug("Server stopped")
-	return nil
 }
 
 // waitForShutdown blocks until the server receives an interrupt signal, then initiates a graceful shutdown.
